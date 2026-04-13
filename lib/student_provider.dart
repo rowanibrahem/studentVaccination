@@ -5,34 +5,41 @@ import 'package:vaccacine_app/student_model.dart';
 class StudentsProvider extends ChangeNotifier {
   final GoogleSheetsService _service = GoogleSheetsService();
   
-  List<Student> _allStudents = [];
-  List<Student> _filteredStudents = [];
+  List<Student> _masterList = []; // المخزن الرئيسي لكل اللي نزل من الشيت
+  List<Student> _displayList = [];
   bool _isLoading = false;
+  bool _isFetchingMore = false;
+  bool _hasMore = true;
+  int _currentPage = 1;
   String _errorMessage = '';
 
   // Getters
-  List<Student> get students => _filteredStudents;
+  List<Student> get students => _displayList; // الـ UI بيقرأ من هنا
   bool get isLoading => _isLoading;
+  bool get isFetchingMore => _isFetchingMore;
+  bool get hasMore => _hasMore;
   String get errorMessage => _errorMessage;
 
-  // فلتر القيم
+  // فلاتر البحث
   String _selectedSchoolFilter = 'الكل';
   String _selectedClassFilter = 'الكل';
   String _selectedStatusFilter = 'الكل';
 
-  String get selectedSchoolFilter => _selectedSchoolFilter;
-  String get selectedClassFilter => _selectedClassFilter;
-  String get selectedStatusFilter => _selectedStatusFilter;
-
   // جلب كل الطلاب
-  Future<void> fetchStudents() async {
+  // 1. تحميل أول 20 طالب
+  Future<void> fetchInitialStudents() async {
+    _currentPage = 1;
+    _hasMore = true;
     _isLoading = true;
     _errorMessage = '';
+    _masterList.clear();
     notifyListeners();
 
     try {
-      _allStudents = await _service.fetchAllStudents();
-      _applyFilters();
+      final result = await _service.fetchStudentsPaged(page: _currentPage);
+      _masterList = List.from(result['students']);
+      _hasMore = result['hasMore'];
+      _applyFilters(); // تحديث القائمة اللي بتتعرض
     } catch (e) {
       _errorMessage = 'فشل في تحميل البيانات: $e';
     } finally {
@@ -41,12 +48,38 @@ class StudentsProvider extends ChangeNotifier {
     }
   }
 
-  // تطبيق الفلاتر
-  void applyFilters({
-    String? school,
-    String? classLevel,
-    String? status,
-  }) {
+  // 2. تحميل المزيد عند التمرير (Pagination)
+  Future<void> fetchMoreStudents() async {
+    if (_isFetchingMore || !_hasMore || _isLoading) return;
+
+    _isFetchingMore = true;
+    notifyListeners();
+    
+    final nextPage = _currentPage + 1;
+
+    try {
+      final result = await _service.fetchStudentsPaged(page: nextPage);
+      final newStudents = result['students'] as List<Student>;
+      
+      // ✅ منع التكرار بناءً على rowIndex
+      final existingIds = _masterList.map((s) => s.rowIndex).toSet();
+      final uniqueNewStudents = newStudents.where((s) => !existingIds.contains(s.rowIndex)).toList();
+      
+      _masterList.addAll(uniqueNewStudents);
+      _currentPage = nextPage;
+      _hasMore = result['hasMore'];
+      
+      _applyFilters(); // تطبيق الفلتر على الداتا الجديدة والقديمة سوا
+    } catch (e) {
+      print('❌ Error loading more: $e');
+    } finally {
+      _isFetchingMore = false;
+      notifyListeners();
+    }
+  }
+
+  // 3. تطبيق الفلاتر
+  void applyFilters({String? school, String? classLevel, String? status}) {
     _selectedSchoolFilter = school ?? _selectedSchoolFilter;
     _selectedClassFilter = classLevel ?? _selectedClassFilter;
     _selectedStatusFilter = status ?? _selectedStatusFilter;
@@ -54,29 +87,23 @@ class StudentsProvider extends ChangeNotifier {
   }
 
   void _applyFilters() {
-    _filteredStudents = _allStudents.where((student) {
-      // فلتر المدرسة
-      if (_selectedSchoolFilter != 'الكل' && 
-          student.school != _selectedSchoolFilter) {
-        return false;
-      }
-      
-      // فلتر الفصل
-      if (_selectedClassFilter != 'الكل' && 
-          student.classLevel != _selectedClassFilter) {
-        return false;
-      }
-      
-      // فلتر الحالة التطعيمية
-      if (_selectedStatusFilter != 'الكل' && 
-          student.vaccinationStatus != _selectedStatusFilter) {
-        return false;
-      }
-      
+    // بنفلتر دايماً من الـ Master List عشان م نضيعش داتا
+    _displayList = _masterList.where((student) {
+      if (_selectedSchoolFilter != 'الكل' && student.school != _selectedSchoolFilter) return false;
+      if (_selectedClassFilter != 'الكل' && student.classLevel != _selectedClassFilter) return false;
+      if (_selectedStatusFilter != 'الكل' && student.vaccinationStatus != _selectedStatusFilter) return false;
       return true;
     }).toList();
     
     notifyListeners();
+  }
+
+  // 4. إعادة تعيين الفلاتر وتحميل من الأول
+  void resetAndRefetch() {
+    _selectedSchoolFilter = 'الكل';
+    _selectedClassFilter = 'الكل';
+    _selectedStatusFilter = 'الكل';
+    fetchInitialStudents();
   }
 
   // تحديث حالة التطعيم
@@ -151,15 +178,17 @@ class StudentsProvider extends ChangeNotifier {
     return true;
   }
   // جلب قائمة المدارس للفلتر
-  List<String> getUniqueSchools() {
-    final schools = _allStudents.map((s) => s.school).toSet().toList();
+ List<String> getUniqueSchools() {
+    // ✅ غيرنا _allStudents لـ _masterList
+    final schools = _masterList.map((s) => s.school).toSet().toList();
     schools.sort();
     return ['الكل', ...schools];
   }
 
   // جلب قائمة الفصول للفلتر
   List<String> getUniqueClasses() {
-    final classes = _allStudents.map((s) => s.classLevel).toSet().toList();
+    // ✅ غيرنا _allStudents لـ _masterList
+    final classes = _masterList.map((s) => s.classLevel).toSet().toList();
     classes.sort();
     return ['الكل', ...classes];
   }

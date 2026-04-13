@@ -12,11 +12,38 @@ class StudentsScreen extends StatefulWidget {
 }
 
 class _StudentsScreenState extends State<StudentsScreen> {
+  // 1. تعريف الـ ScrollController
+  late final ScrollController _scrollController;
+
   @override
   void initState() {
     super.initState();
-    // بننادي على البيانات أول ما الشاشة تفتح
-    Future.microtask(() => context.read<StudentsProvider>().fetchStudents());
+    _scrollController = ScrollController();
+    
+    // ربط مستمع للـ Scroll عشان ينادي الـ Pagination
+    _scrollController.addListener(_onScroll);
+
+    // نداء البيانات لأول مرة بعد ما الـ Frame يخلص
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<StudentsProvider>().fetchInitialStudents();
+    });
+  }
+
+  // دالة مراقبة حركة القائمة
+  void _onScroll() {
+    final provider = context.read<StudentsProvider>();
+    // لو المستخدم وصل قبل نهاية القائمة بـ 200 بكسل
+    if (_scrollController.position.pixels >= 
+        _scrollController.position.maxScrollExtent - 500) {
+      provider.fetchMoreStudents();
+    }
+  }
+
+  @override
+  void dispose() {
+    // 2. إغلاق الكنترولر للحفاظ على الذاكرة
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -31,19 +58,13 @@ class _StudentsScreenState extends State<StudentsScreen> {
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
         actions: [
-          // زر تحديث البيانات
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () {
-              context.read<StudentsProvider>().fetchStudents();
-            },
+            onPressed: () => context.read<StudentsProvider>().resetAndRefetch(),
           ),
-          // زر إعادة تعيين الفلاتر
           IconButton(
             icon: const Icon(Icons.filter_alt_off),
-            onPressed: () {
-              context.read<StudentsProvider>().resetFilters();
-            },
+            onPressed: () => context.read<StudentsProvider>().resetFilters(),
           ),
         ],
       ),
@@ -51,136 +72,112 @@ class _StudentsScreenState extends State<StudentsScreen> {
         textDirection: TextDirection.rtl,
         child: Consumer<StudentsProvider>(
           builder: (context, provider, child) {
-            if (provider.isLoading) {
+            // حالة التحميل الأولية
+            if (provider.isLoading && provider.students.isEmpty) {
               return const Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.teal),
-                    ),
+                    CircularProgressIndicator(color: Colors.teal),
                     SizedBox(height: 16),
                     Text('جاري تحميل البيانات...'),
                   ],
                 ),
               );
             }
-        
-            if (provider.errorMessage.isNotEmpty) {
+
+            // حالة الخطأ
+            if (provider.errorMessage.isNotEmpty && provider.students.isEmpty) {
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
                     const SizedBox(height: 16),
-                    Text(
-                      provider.errorMessage,
-                      style: const TextStyle(fontSize: 16),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
+                    Text(provider.errorMessage, textAlign: TextAlign.center),
                     ElevatedButton(
-                      onPressed: () => provider.fetchStudents(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                      ),
+                      onPressed: () => provider.fetchInitialStudents(),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
                       child: const Text('حاول مرة أخرى'),
                     ),
                   ],
                 ),
               );
             }
-        
+
+            // حالة عدم وجود نتائج
             if (provider.students.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
-                    const SizedBox(height: 16),
-                    Text(
-                      'لا يوجد طلاب مطابقين للفلتر',
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              );
+              return const Center(child: Text('لا يوجد طلاب مطابقين للفلتر'));
             }
-        
+
             return Column(
               children: [
-                // قسم الفلاتر
                 const FilterSection(),
-        
+                
                 // إحصائية سريعة
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   color: Colors.teal.shade50,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'إجمالي الطلاب: ${provider.students.length}',
+                        'إجمالي المحمل: ${provider.students.length}',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.teal,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
                           'مطعمين: ${provider.students.where((s) => s.vaccinationStatus == "تم التطعيم").length}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                          ),
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
                         ),
                       ),
                     ],
                   ),
                 ),
-        
-                // قائمة الطلاب
+
+                // القائمة مع الـ Pagination
                 Expanded(
                   child: ListView.builder(
+                    controller: _scrollController, // ربط الكنترولر هنا
                     padding: const EdgeInsets.all(8),
-                    itemCount: provider.students.length,
+                    // نزود صف واحد لو فيه داتا تانية لسه هتتحمل عشان نظهر الـ Loader
+                    itemCount: provider.students.length + (provider.hasMore ? 1 : 0),
                     itemBuilder: (context, index) {
-                      final student = provider.students[index];
-                      return StudentCard(
-                        student: student,
-                        onStatusChanged:
-                            (newStatus, reason, {String? vaccineName}) async {
-                              await provider.updateVaccinationStatus(
-                                student,
-                                newStatus,
-                                reason: reason,
-                                context: context,
-                                vaccineName:
-                                    vaccineName, // بنمرر الكونتيكست عشان نطلع رسائل الخطأ والنجاح
-                              );
-        
-                              // عرض رسالة نجاح
-                              // if (context.mounted) {
-                              //   ScaffoldMessenger.of(context).showSnackBar(
-                              //     SnackBar(
-                              //       content: Text(
-                              //         'تم تحديث حالة ${student.name} إلى "$newStatus"',
-                              //       ),
-                              //       backgroundColor: Colors.teal,
-                              //       duration: const Duration(seconds: 2),
-                              //     ),
-                              //   );
-                              // }
-                            },
-                      );
+                      if (index < provider.students.length) {
+                        final student = provider.students[index];
+                        return StudentCard(
+                          student: student,
+                          onStatusChanged: (newStatus, reason, {vaccineName}) async {
+                            await provider.updateVaccinationStatus(
+                              student,
+                              newStatus,
+                              reason: reason,
+                              vaccineName: vaccineName,
+                              context: context,
+                            );
+                          },
+                        );
+                      } else {
+                        // مؤشر تحميل صغير يظهر في أسفل القائمة أثناء تحميل الصفحات الجديدة
+                        return const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.teal,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
                     },
                   ),
                 ),

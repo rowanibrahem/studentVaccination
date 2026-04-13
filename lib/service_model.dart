@@ -1,36 +1,59 @@
 import 'dart:convert';
-import 'package:dio/dio.dart'; // استخدمنا dio
+import 'package:dio/dio.dart';
 import 'package:vaccacine_app/student_model.dart';
 
 class GoogleSheetsService {
-  static const String baseUrl = 'https://script.google.com/macros/s/AKfycbwXKvidRurDqoBJdaxYgFS1PTG6wsuxn00uFqnrsmOubKKNyLjsFW0ARVl0tdA4f1GyNg/exec';
+  static const String baseUrl = 'https://script.google.com/macros/s/AKfycbzXAtBl75Q3_Lvg-g--WarJ9LMKR9lQwPfIxVRiRI-FCrmBbU2OKuYiRY1ookqGuWSv9w/exec';
   
   final Dio _dio = Dio(BaseOptions(
-    followRedirects: true, // دي أهم خاصية عشان تحل مشكلة 302
+    followRedirects: true,
     validateStatus: (status) => status! < 500,
   ));
 
-  Future<List<Student>> fetchAllStudents() async {
+  // ✅ الدالة الجديدة بعد تعديلها للـ Pagination
+  Future<Map<String, dynamic>> fetchStudentsPaged({
+    required int page, 
+    int pageSize = 50, // خليناها 20 عشان السرعة والتوافق
+  }) async {
     try {
-      final response = await _dio.get(baseUrl);
+      final response = await _dio.get(
+        baseUrl,
+        queryParameters: {
+          'page': page,
+          'pageSize': pageSize,
+        },
+      );
+      
       if (response.statusCode == 200) {
-        // Dio بيحول الـ body لـ Map أوتوماتيك مش محتاجة json.decode
-        final data = response.data is String ? json.decode(response.data) : response.data;
+        final data = response.data is String 
+            ? json.decode(response.data) 
+            : response.data;
+            
         if (data['success'] == true) {
-          final List<dynamic> studentsJson = data['data'];
-          return List.generate(
-            studentsJson.length,
-            (index) => Student.fromJson(studentsJson[index], index),
-          );
+          final List<dynamic> list = data['data'];
+          
+          // تحويل البيانات لـ Objects مع استخدام الـ rowIndex القادم من الشيت
+          final students = list.map((item) => Student.fromJson(
+            item, 
+            item['rowIndex'] as int
+          )).toList();
+          
+          return {
+            'students': students,
+            'hasMore': data['hasMore'] as bool,
+            'total': data['total'] as int,
+            'currentPage': data['currentPage'] as int,
+          };
         }
       }
-      throw Exception('فشل في جلب البيانات');
+      throw Exception('فشل في جلب البيانات من السيرفر');
     } catch (e) {
-      print('Error: $e');
+      print('❌ Error in fetchStudentsPaged: $e');
       rethrow;
     }
   }
 
+  // دالة التحديث بتبقى زي ما هي (شغالة تمام بـ Dio)
   Future<bool> updateVaccinationStatus({
     required int rowIndex,
     required String status,
@@ -45,20 +68,12 @@ class GoogleSheetsService {
         'سبب_عدم_التطعيم': reason ?? '',
         'تاريخ_التطعيم': date ?? '',
         'اسم_الطعم': vaccineName ?? '',   
-           };
-      print('📤 Request body: ${json.encode(body)}');
+      };
       
-      final response = await _dio.post(
-        baseUrl,
-        data: body,
-      );
-         
-      // جوجل أحياناً بترد بـ 200 أو 302 حتى لو التحديث نجح
-      // مع Dio إحنا بنلحق الرد النهائي
+      final response = await _dio.post(baseUrl, data: body);
+          
       if (response.statusCode == 200 || response.statusCode == 302) {
-         // لو الرد فيه success: true
          if (response.data is Map && response.data['success'] == true) return true;
-         // أحياناً جوجل بترد بـ HTML بعد الـ Redirect بس التحديث بيكون تم فعلاً
          return true; 
       }
       return false;
