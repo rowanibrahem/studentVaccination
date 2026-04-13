@@ -3,7 +3,7 @@ import 'package:dio/dio.dart'; // استخدمنا dio
 import 'package:vaccacine_app/student_model.dart';
 
 class GoogleSheetsService {
-  static const String baseUrl = 'https://script.google.com/macros/s/AKfycbyXMbCHz5CRKRAaKdEcRknh0ph9HxXKJKbEkq7O3WKHuErGzJbNfqOYbfy_OCjj7Tk2XQ/exec';
+  static const String baseUrl = 'https://script.google.com/macros/s/AKfycbwXKvidRurDqoBJdaxYgFS1PTG6wsuxn00uFqnrsmOubKKNyLjsFW0ARVl0tdA4f1GyNg/exec';
   
   final Dio _dio = Dio(BaseOptions(
     followRedirects: true, // دي أهم خاصية عشان تحل مشكلة 302
@@ -36,18 +36,23 @@ class GoogleSheetsService {
     required String status,
     String? reason,
     String? date,
+    String? vaccineName,
   }) async {
     try {
+      final body = {
+        'rowIndex': rowIndex,
+        'الحالة_التطعيمية': status,
+        'سبب_عدم_التطعيم': reason ?? '',
+        'تاريخ_التطعيم': date ?? '',
+        'اسم_الطعم': vaccineName ?? '',   
+           };
+      print('📤 Request body: ${json.encode(body)}');
+      
       final response = await _dio.post(
         baseUrl,
-        data: {
-          'rowIndex': rowIndex,
-          'الحالة_التطعيمية': status,
-          'سبب_عدم_التطعيم': reason ?? '',
-          'تاريخ_التطعيم': date ?? '',
-        },
+        data: body,
       );
-
+         
       // جوجل أحياناً بترد بـ 200 أو 302 حتى لو التحديث نجح
       // مع Dio إحنا بنلحق الرد النهائي
       if (response.statusCode == 200 || response.statusCode == 302) {

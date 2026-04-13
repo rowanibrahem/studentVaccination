@@ -8,6 +8,7 @@ class Student {
   String reason;
   final String phone;
   String vaccinationDate;
+  String vaccineName;
 
   Student({
     required this.rowIndex,
@@ -19,6 +20,7 @@ class Student {
     required this.reason,
     required this.phone,
     required this.vaccinationDate,
+    required this.vaccineName,
   });
 
   // من JSON لـ Object
@@ -33,6 +35,7 @@ class Student {
       reason: json['سبب عدم التطعيم']?.toString() ?? '',
       phone: json['رقم التليفون']?.toString() ?? '',
       vaccinationDate: json['تاريخ التطعيم']?.toString() ?? '',
+      vaccineName: json['اسم الطعم']?.toString() ?? '',
     );
   }
 
@@ -43,6 +46,7 @@ class Student {
       'الحالة_التطعيمية': vaccinationStatus,
       'سبب_عدم_التطعيم': reason,
       'تاريخ_التطعيم': vaccinationDate,
+      'اسم الطعم': vaccineName,
     };
   }
 }

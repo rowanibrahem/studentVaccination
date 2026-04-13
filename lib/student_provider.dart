@@ -85,17 +85,18 @@ class StudentsProvider extends ChangeNotifier {
     Student student, 
     String newStatus, {
     String? reason, 
+    String? vaccineName,
     BuildContext? context // أضفنا الكونتيكست عشان نطلع رسائل خطأ
   }) async {
     // حفظ الحالة القديمة عشان لو حصل فشل نرجع لها
     final oldStatus = student.vaccinationStatus;
     final oldReason = student.reason;
     final oldDate = student.vaccinationDate;
-
+    final oldVaccineName = student.vaccineName;
     // 1. التحديث الفوري في الواجهة (Optimistic UI)
     student.vaccinationStatus = newStatus;
     if (reason != null) student.reason = reason;
-    
+    if (vaccineName != null) student.vaccineName = vaccineName;
     // تسجيل التاريخ لو الحالة "تم التطعيم"
     String? updateDate;
     if (newStatus == 'تم التطعيم') {
@@ -114,6 +115,7 @@ class StudentsProvider extends ChangeNotifier {
       status: newStatus,
       reason: student.reason,
       date: updateDate,
+      vaccineName: vaccineName,
     );
     
     // 3. معالجة حالة الفشل
@@ -122,6 +124,7 @@ class StudentsProvider extends ChangeNotifier {
       student.vaccinationStatus = oldStatus;
       student.reason = oldReason;
       student.vaccinationDate = oldDate;
+      student.vaccineName = oldVaccineName;
       notifyListeners();
 
       // تنبيه المستخدم إن البيانات مأكتتش في الشيت

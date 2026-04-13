@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:vaccacine_app/student_provider.dart';
 import 'package:vaccacine_app/student_screen.dart';
@@ -24,6 +25,13 @@ class MyApp extends StatelessWidget {
           fontFamily: 'Cairo', 
           useMaterial3: true,
         ),
+        locale: const Locale('ar', 'EG'),
+        supportedLocales: const [Locale('ar', 'EG')],
+        localizationsDelegates: [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
         home: const StudentsScreen(),
       ),
     );

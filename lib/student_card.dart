@@ -3,7 +3,7 @@ import 'package:vaccacine_app/student_model.dart';
 
 class StudentCard extends StatefulWidget {
   final Student student;
-  final Function(String newStatus, String? reason) onStatusChanged;
+  final Function(String newStatus, String? reason , {String? vaccineName}) onStatusChanged;
 
   const StudentCard({
     super.key,
@@ -197,6 +197,10 @@ class _StudentCardState extends State<StudentCard> {
     final TextEditingController customReasonController = TextEditingController();
     String? selectedReason;
     bool showReasonField = false;
+   String? selectedVaccine = widget.student.vaccineName.isNotEmpty 
+      ? widget.student.vaccineName 
+      : null;
+  bool showVaccineField = false;
 
     showDialog(
       context: context,
@@ -221,8 +225,11 @@ class _StudentCardState extends State<StudentCard> {
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: () {
-                              Navigator.pop(dialogContext);
-                              widget.onStatusChanged('تم التطعيم', null);
+                              // Navigator.pop(dialogContext);
+                              // widget.onStatusChanged('تم التطعيم', null);
+                              setDialogState(() {
+                              showVaccineField = true;
+                            });
                             },
                             icon: const Icon(Icons.check, size: 18),
                             label: const Text('نعم، تم التطعيم'),
@@ -252,7 +259,70 @@ class _StudentCardState extends State<StudentCard> {
                         ),
                       ],
                     ),
+                    if (showVaccineField) ...[
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'اختر نوع الطعم:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
                     
+                    DropdownButtonFormField<String>(
+                      value: selectedVaccine,
+                      decoration: InputDecoration(
+                        hintText: 'اختر نوع الطعم...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        prefixIcon: const Icon(Icons.vaccines, size: 20),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'سحائي ثنائي', child: Text('💉سحائي ثنائي')),
+                        DropdownMenuItem(value: 'ثنائي', child: Text('💉 ثنائي')),
+                      ],
+                      onChanged: (value) {
+                        setDialogState(() {
+                          selectedVaccine = value;
+                        });
+                      },
+                    ),
+                    
+                    const SizedBox(height: 20),
+                    
+                    // زر تأكيد التطعيم
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (selectedVaccine == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('يرجى اختيار نوع الطعم'),
+                                backgroundColor: Colors.red,
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            return;
+                          }
+                          
+                          Navigator.pop(dialogContext);
+                          widget.onStatusChanged('تم التطعيم', null, vaccineName: selectedVaccine);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('تأكيد التطعيم'),
+                      ),
+                    ),
+                  ],
                     // حقل السبب (يظهر بعد الضغط على "لا")
                     if (showReasonField) ...[
                       const SizedBox(height: 20),
@@ -363,51 +433,79 @@ class _StudentCardState extends State<StudentCard> {
                   ] else ...[
                     // لو كان مطعماً بالفعل
                     const Text(
-                      'هل تريد تغيير الحالة إلى "غير مطعم"؟',
-                      style: TextStyle(fontSize: 16),
+                    'تعديل حالة التطعيم',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  // عرض اسم الطعم الحالي
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.shade50,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(height: 20),
-                    Row(
+                    child: Row(
                       children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              Navigator.pop(dialogContext);
-                              _showReasonDialog(context);
-                            },
-                            icon: const Icon(Icons.edit),
-                            label: const Text('نعم، تغيير'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.orange,
-                              side: const BorderSide(color: Colors.orange),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () => Navigator.pop(dialogContext),
-                            icon: const Icon(Icons.cancel),
-                            label: const Text('إلغاء'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.grey,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
+                        const Icon(Icons.vaccines, color: Colors.teal),
+                        const SizedBox(width: 8),
+                        Text(
+                          'الطعم الحالي: ${widget.student.vaccineName.isNotEmpty ? widget.student.vaccineName : "غير محدد"}',
+                          style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
-                  ],
+                  ),
+                  
+                  const SizedBox(height: 20),
+                  
+                  const Text(
+                    'هل تريد تغيير الحالة إلى "غير مطعم"؟',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(dialogContext);
+                            _showReasonDialog(context);
+                          },
+                          icon: const Icon(Icons.edit),
+                          label: const Text('نعم، تغيير'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.orange,
+                            side: const BorderSide(color: Colors.orange),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => Navigator.pop(dialogContext),
+                          icon: const Icon(Icons.cancel),
+                          label: const Text('إلغاء'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.grey,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
 
   // ==================== نافذة سبب عدم التطعيم (للتعديل من مطعم لغير مطعم) ====================
   void _showReasonDialog(BuildContext context) {
@@ -502,6 +600,7 @@ class _StudentCardState extends State<StudentCard> {
               _detailRow('المسلسل', widget.student.serial),
               _detailRow('رقم التليفون', widget.student.phone),
               _detailRow('الحالة', widget.student.vaccinationStatus),
+              _detailRow('نوع الطعم', widget.student.vaccineName.isNotEmpty ? widget.student.vaccineName : 'غير محدد'),
               if (widget.student.reason.isNotEmpty)
                 _detailRow('سبب عدم التطعيم', widget.student.reason),
               if (widget.student.vaccinationDate.isNotEmpty)
